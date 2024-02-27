@@ -2,15 +2,41 @@
 
 const request = require('request');
 
-request('https://swapi-api.hbtn.io/api/films/' + process.argv[2], function (err, res, body) {
-  if (err) throw err;
-  const actors = JSON.parse(body).characters;
-  exactOrder(actors, 0);
-});
-const exactOrder = (actors, x) => {
-  if (x === actors.length) return;
-  request(actors[x], function (err, res, body) {
-    if (err) throw err;
-    console.log(JSON.parse(body).name);
-    exactOrder(actors, x + 1);
+function getMovieCharacters (movieId) {
+  const apiUrl = 'https://swapi.dev/api';
+  const filmUrl = `${apiUrl}/films/${movieId}/`;
+
+  return new Promise((resolve, reject) => {
+    request(filmUrl, (err, _, body) => {
+      if (err) {
+        reject(err);
+        return;
+      }
+
+      const charactersURL = JSON.parse(body).characters;
+      const charactersPromises = charactersURL.map(url => {
+        return new Promise((resolve, reject) => {
+          request(url, (promiseErr, __, charactersReqBody) => {
+            if (promiseErr) {
+              reject(promiseErr);
+              return;
+            }
+            resolve(JSON.parse(charactersReqBody).name);
+          });
+        });
+      });
+
+      Promise.all(charactersPromises)
+        .then(names => resolve(names))
+        .catch(allErr => reject(allErr));
+    });
   });
+}
+
+if (process.argv.length > 2) {
+  const movieId = process.argv[2];
+  getMovieCharacters(movieId)
+    .then(names => console.log(names.join('\n')))
+    .catch(error => console.error(error));
+} else {
+  console.log('Usage: node script.js <Movie ID>');
